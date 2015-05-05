@@ -1,1 +1,1 @@
-# mail2github
+# mail2github & rss2github
