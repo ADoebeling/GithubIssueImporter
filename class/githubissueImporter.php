@@ -1,7 +1,7 @@
 <?php
 /**
- * mail2github
- * Imports mails from imap-account as github.com-issue
+ * GithubIssueImporter
+ * Imports mails from imap-account ans rss-feeds as github.com-issue
  *
  * @Author      Andreas Doebeling <ad@1601.com>
  * @Copyright   1601.production siegler&thuemmler ohg
@@ -12,20 +12,27 @@
 
 
 
-namespace SNE\mail2github;
+namespace SNE\githubIssueImporter;
 
 use Monolog\Logger;
 use Monolog\Handler\StreamHandler;
 
 
-class mail2github {
-
-
-    protected $mails = array();
-    protected $issues = array();
+class githubIssueImporter {
 
     protected $mailAccount;
+    
+    protected $mails = array();
+    
+    protected $feedAccount; 
+    
+    protected $feed = array();
+    
     protected $githubAccount;
+ 
+    protected $issues = array();
+
+    
 
     public function __construct()
     {
@@ -39,22 +46,36 @@ class mail2github {
     {
 
     }
+    
+    public function setRssAccount($url, $user, $pwd, $type="ATOM")
+    {
+
+    }
 
     public function setGithubAccount ($user, $pwd, $repo)
     {
 
     }
 
-    public function fetchMails()
+    public function loadAll()
     {
-
+        $this->loadMails();
+        $this->loadRss();
+        return $this;
+    }
+    
+    public function loadMails($parser = 'PLAIN')
+    {
+        return $this;
+    }
+    
+    public function loadFeed($parser = 'RSS')
+    {
+        return $this;
     }
 
 
-    public function makeIssues ($parser = 'plain')
-    {
 
-    }
 
     public function postIssues()
     {
