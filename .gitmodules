@@ -1,0 +1,3 @@
+[submodule "3rd-party/barbushin/php-imap"]
+	path = 3rd-party/barbushin/php-imap
+	url = git@github.com:barbushin/php-imap.git
