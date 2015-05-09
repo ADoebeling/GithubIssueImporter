@@ -1,0 +1,6 @@
+[submodule "3rd-party/barbushin/php-imap"]
+	path = 3rd-party/barbushin/php-imap
+	url = git@github.com:barbushin/php-imap.git
+[submodule "3rd-party/tan-tan-kanarek/github-php-client"]
+	path = 3rd-party/tan-tan-kanarek/github-php-client
+	url = git@github.com:tan-tan-kanarek/github-php-client.git
