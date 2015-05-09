@@ -74,7 +74,7 @@ class githubIssueImporter {
         return $this;
     }
     
-    public function loadMails()
+    public function loadMails($delete=true)
     {
         $mailsIds = $this->mailbox->searchMailBox('ALL');
         if(!$mailsIds) {
@@ -84,10 +84,16 @@ class githubIssueImporter {
         foreach ($mailsIds as $id)
         {
             $this->mails[$id] = $this->mailbox->getMail($id);
+            if ($delete)
+            {
+                $this->mailbox->deleteMail($id);
+            }
         }
 
         return $this;
     }
+
+
     
     public function loadFeed($parser = 'RSS')
     {
@@ -110,8 +116,42 @@ class githubIssueImporter {
         {
             foreach ($this->mails as $mailId => &$mail)
             {
-                $issue['title'] =   utf8_decode($mail->subject).' am '.$mail->date;
-                $issue['text'] =    utf8_decode($mail->textPlain);
+                $mail->textPlain = str_replace("Wir haben für Sie folgenden Anruf angenommen:\r\n", '', $mail->textPlain);
+                $mail->textPlain = str_replace("Herzliche Grüße\nIhr DiConn Team", '', $mail->textPlain);
+                $mail->textPlain = str_replace("diconn", '', $mail->textPlain);
+
+                // Notiz extrahieren
+                $notiz = explode("Notiz: ", utf8_decode($mail->textPlain));
+                $notiz = explode('Telefon: ', $notiz[1]);
+                $notiz = explode('Mobil: ', $notiz[0]);
+                $notiz = explode('E-Mail: ', $notiz[0]);
+                $notiz = explode('Bearbeitet durch: ', $notiz[0]);
+                $notiz = $notiz[0];
+
+                // Meta-Angaben zur MD-Tabelle aufbereiten
+                $text = explode("\r\n", utf8_decode($mail->textPlain));
+                $i = 0;
+                foreach ($text as &$line)
+                {
+                    $i++;
+                    $delimiter = ':';
+                    $element = explode($delimiter, $line, 2);
+
+                    if (isset($element[1]) && !empty($element[1]) && $element[0] != "Notiz") {
+                        $line = "{$element[0]} | {$element[1]}";
+                        if ($i == 1) $line .= " Uhr \n-------|-------";
+                        $line .= "\n";
+                    }
+                    else
+                    {
+                        $line = '';
+                    }
+                }
+                $text = implode("", $text);
+                $text .= "\n$notiz";
+
+                $issue['title'] =   utf8_decode($mail->subject);
+                $issue['text'] =    $text;
                 $issue['label'] =   array('Support', 'Call');
                 $this->issues[] = $issue;
             }
@@ -127,8 +167,9 @@ class githubIssueImporter {
     {
         foreach ($this->issues as &$issue)
         {
-            $this->githubRepo->issues->createAnIssue($repoOwner, $repo, $issue['title'], utf8_encode($issue['text']), $assignee);
             echo $issue['text'];
+            $this->githubRepo->issues->createAnIssue($repoOwner, $repo, utf8_encode($issue['title']), utf8_encode($issue['text']), $assignee, NULL, $issue['label']);
+
         }
 
         //print_r($this->issues);
