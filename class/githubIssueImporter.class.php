@@ -2,6 +2,7 @@
 /**
  * GithubIssueImporter
  * Imports mails from imap-account ans rss-feeds as github.com-issue
+ * Parses some special mails like diconn.de-call-notifications
  *
  * @Author      Andreas Doebeling <ad@1601.com>
  * @Copyright   1601.production siegler&thuemmler ohg
@@ -11,9 +12,6 @@
  */
 
 
-
-//use Monolog\Logger;
-//use Monolog\Handler\StreamHandler;
 use PhpImap\Exception;
 
 require_once '../class/imap/Mailbox.php';
@@ -39,6 +37,16 @@ class githubIssueImporter {
     public function __construct()
     {
         //$_GlOBALS['log'] = new Logger('mail2github'):
+    }
+
+    public function reset()
+    {
+        unset($this->mailbox, $this->feedAccount, $this->githubRepo);
+        $this->mails = array();
+        $this->feed = array();
+        $this->issues = array();
+
+        return $this;
     }
 
 
@@ -107,7 +115,7 @@ class githubIssueImporter {
         {
             foreach ($this->mails as $mailId => &$mail)
             {
-                $issue['title'] =   utf8_decode($mail->subject).' am '.$mail->date;
+                $issue['title'] =   utf8_decode($mail->subject);
                 $issue['text'] =    utf8_decode($mail->textPlain);
                 $this->issues[] = $issue;
             }
@@ -125,8 +133,7 @@ class githubIssueImporter {
                 $notiz = explode('Telefon: ', $notiz[1]);
                 $notiz = explode('Mobil: ', $notiz[0]);
                 $notiz = explode('E-Mail: ', $notiz[0]);
-                $notiz = explode('Bearbeitet durch: ', $notiz[0]);
-                $notiz = $notiz[0];
+                $notiz = explode('Bearbeitet durch: ', $notiz[0])[0];
 
                 // Meta-Angaben zur MD-Tabelle aufbereiten
                 $text = explode("\r\n", utf8_decode($mail->textPlain));
@@ -137,7 +144,7 @@ class githubIssueImporter {
                     $delimiter = ':';
                     $element = explode($delimiter, $line, 2);
 
-                    if (isset($element[1]) && !empty($element[1]) && $element[0] != "Notiz") {
+                    if (isset($element[1]) && !empty(trim($element[1])) && $element[0] != "Notiz") {
                         $line = "{$element[0]} | {$element[1]}";
                         if ($i == 1) $line .= " Uhr \n-------|-------";
                         $line .= "\n";
@@ -163,18 +170,13 @@ class githubIssueImporter {
         return $this;
     }
 
-    public function postIssues($repoOwner, $repo, $assignee)
+    public function postIssues($repoOwner, $repo, $assignee = NULL, $label)
     {
         foreach ($this->issues as &$issue)
         {
-            echo $issue['text'];
-            $this->githubRepo->issues->createAnIssue($repoOwner, $repo, utf8_encode($issue['title']), utf8_encode($issue['text']), $assignee, NULL, $issue['label']);
-
+            echo "this->githubRepo->issues->createAnIssue($repoOwner, $repo, {$issue['title']}, {$issue['text']}, $assignee, NULL, {$label})\n";
+            $this->githubRepo->issues->createAnIssue($repoOwner, $repo, utf8_encode($issue['title']), utf8_encode($issue['text']), $assignee, NULL, $label);
         }
-
-        //print_r($this->issues);
-
         return $this;
     }
-
 }
