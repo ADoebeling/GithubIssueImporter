@@ -1,3 +1,4 @@
+#!/usr/local/bin/php56
 <?php
 
 require_once '../config/config.inc.php';
