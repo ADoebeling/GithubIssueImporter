@@ -23,13 +23,15 @@ class githubIssueImporter {
     protected $mailbox;
     
     protected $mails = array();
-    
-    protected $feedAccount; 
-    
-    protected $feed = array();
+
+    protected $feed;
     
     protected $githubRepo;
- 
+
+    /**
+     * Array with all prepared issues: $issues[] = array('title' => $title, 'text' => $text, 'assignee' => $assignee)
+     * @var array
+     */
     protected $issues = array();
 
     
@@ -37,13 +39,13 @@ class githubIssueImporter {
     public function __construct()
     {
         //$_GlOBALS['log'] = new Logger('mail2github'):
+        $this->githubRepo = new GitHubClient();
     }
 
     public function reset()
     {
-        unset($this->mailbox, $this->feedAccount, $this->githubRepo);
+        unset($this->mailbox, $this->githubRepo, $this->feed);
         $this->mails = array();
-        $this->feed = array();
         $this->issues = array();
 
         return $this;
@@ -63,14 +65,14 @@ class githubIssueImporter {
         return $this;
     }
     
-    public function setRssAccount($url, $user, $pwd, $type="ATOM")
+    public function loadFeed($url)
     {
+        $this->feed = simplexml_load_file($url);
         return $this;
     }
 
     public function setGithubAccount ($user, $pwd)
     {
-        $this->githubRepo = new GitHubClient();
         $this->githubRepo->setCredentials($user, $pwd);
         return $this;
     }
@@ -102,14 +104,7 @@ class githubIssueImporter {
     }
 
 
-    
-    public function loadFeed($parser = 'RSS')
-    {
-        return $this;
-    }
-
-
-    public function buildIssues($source = 'mail', $parser = 'plain')
+    public function buildIssues($source, $parser = 'plain')
     {
         if ($source == 'mail' && $parser == 'plain')
         {
@@ -157,25 +152,82 @@ class githubIssueImporter {
                 $text = implode("", $text);
                 $text .= "\n$notiz";
 
-                $issue['title'] =   utf8_decode($mail->subject);
-                $issue['text'] =    $text;
+                $issue['title'] =   utf8_encode($mail->subject);
+                $issue['text'] =    utf8_encode($text);
                 $issue['label'] =   array('Support', 'Call');
                 $this->issues[] = $issue;
             }
+        }
+        elseif ($source == 'rss' && $parser == 'status.df.eu')
+        {
+            foreach($this->feed->item as $item)
+            {
+                //$guid = (int)explode('#', $item->link)[1];
+                $issue['title'] = $item->title;
+                $issue['text'] = $item->description."\n_____\n".$this->feed->channel->title."\n".$this->feed->channel->description."\n".$item->link;
+
+                $this->issues[] = $issue;
+            }
+
+            print_r($this->issues);
         }
         else
         {
             throw new \Exception ("Source '$source' with parser '$parser' not implemented (yet)", 501);
         }
+
+        print_r($this->issues); die();
         return $this;
     }
 
-    public function postIssues($repoOwner, $repo, $assignee = NULL, $label)
+    /**
+     * Assign issue to users by keyword
+     *
+     * @since v1.1
+     * @link https://github.com/ADoebeling/GithubIssueImporter/issues/6
+     *
+     * @param $haystack
+     * @param $needle
+     * @param $assignee
+     * @return $this
+     * @throws Exception 501 if $haystack is not title or text
+     */
+    public function setAssigneeByKeyword($haystack, $needle, $assignee)
+    {
+        if ($haystack != 'title' && $haystack != 'text')
+        {
+            throw new Exception("\$haystack '$haystack' not specified", 501);
+        }
+        foreach ($this->issues as &$issue)
+        {
+            if (strpos($issue[$haystack], $needle) !== false)
+            {
+                $issue['assignee'] = $assignee;
+            }
+        }
+        return $this;
+    }
+
+    public function postIssues($repoOwner, $repo, $defaultAssignee = NULL, $label, $update = false)
     {
         foreach ($this->issues as &$issue)
         {
-            echo "this->githubRepo->issues->createAnIssue($repoOwner, $repo, {$issue['title']}, {$issue['text']}, $assignee, NULL, {$label})\n";
-            $this->githubRepo->issues->createAnIssue($repoOwner, $repo, utf8_encode($issue['title']), utf8_encode($issue['text']), $assignee, NULL, $label);
+            if (!isset($issue['assignee']))
+            {
+                $issue['assignee'] = $defaultAssignee;
+            }
+
+            if ($update)
+            {
+                $currentIssues = $this->githubRepo->issues->listIssues($repoOwner, $repo);
+                var_dump($currentIssues);
+                die();
+            }
+            else
+            {
+                echo "this->githubRepo->issues->createAnIssue($repoOwner, $repo, {$issue['title']}, {$issue['text']}, $assignee, NULL, {$label})\n";
+                $this->githubRepo->issues->createAnIssue($repoOwner, $repo, $issue['title'], $issue['text'], $issue['assignee'], NULL, $label);
+            }
         }
         return $this;
     }

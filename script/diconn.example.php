@@ -12,7 +12,10 @@ $gii        -> setGithubAccount('gitHub-User', 'API-Token')
             -> loadMails()
             -> buildIssues('mail', 'diconn')
 
-            -> postIssues('gitHub-RepoOwner', 'gitHub-Repo', 'Assingee', array('Support', 'Call'))
+            -> setAssigneeByKeyword('title', 'LastName1', 'user1')
+            -> setAssigneeByKeyword('title', 'LastName2', 'user2')
+
+            -> postIssues('gitHub-RepoOwner', 'gitHub-Repo', 'user', array('Support', 'Call'))
 
             // If you want to import multiple accounts
             -> reset();
