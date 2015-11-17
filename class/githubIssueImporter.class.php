@@ -134,7 +134,9 @@ class githubIssueImporter {
                 $notiz = explode('Mobil: ', $notiz[0]);
                 $notiz = explode('E-Mail: ', $notiz[0]);
                 $notiz = explode('Bearbeitet durch: ', $notiz[0])[0];
-
+				
+                var_dump($notiz);
+                
                 // Meta-Angaben zur MD-Tabelle aufbereiten
                 $text = explode("\r\n", utf8_decode($mail->textPlain));
                 $i = 0;
