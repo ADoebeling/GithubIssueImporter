@@ -10,46 +10,38 @@
  * @Link        http://www.1601.com
  * @Link        http://xing.doebeling.de
  */
-
-
 use PhpImap\Exception;
-
 require_once '../class/imap/Mailbox.php';
 require_once '../class/imap/IncomingMail.php';
 require_once '../class/github/client/GitHubClient.php';
+const CONF_FILE = '../config/config.inc.txt';
 
 class githubIssueImporter {
-
     protected $mailbox;
     
     protected $mails = array();
-    
-    protected $feedAccount; 
-    
-    protected $feed = array();
+    protected $feed;
+    protected $confUser = array();
     
     protected $githubRepo;
- 
+    /**
+     * Array with all prepared issues: $issues[] = array('title' => $title, 'text' => $text, 'assignee' => $assignee)
+     * @var array
+     */
     protected $issues = array();
-
     
-
     public function __construct()
     {
         //$_GlOBALS['log'] = new Logger('mail2github'):
+        $this->githubRepo = new GitHubClient();
     }
-
     public function reset()
     {
-        unset($this->mailbox, $this->feedAccount, $this->githubRepo);
+        unset($this->mailbox, $this->githubRepo, $this->feed);
         $this->mails = array();
-        $this->feed = array();
         $this->issues = array();
-
         return $this;
     }
-
-
     public function setMailbox($host, $user, $pwd, $type="IMAPs")
     {
         if ($type == 'IMAPs')
@@ -63,18 +55,16 @@ class githubIssueImporter {
         return $this;
     }
     
-    public function setRssAccount($url, $user, $pwd, $type="ATOM")
+    public function loadFeed($url)
     {
+        $this->feed = simplexml_load_file($url);
         return $this;
     }
-
     public function setGithubAccount ($user, $pwd)
     {
-        $this->githubRepo = new GitHubClient();
         $this->githubRepo->setCredentials($user, $pwd);
         return $this;
     }
-
     public function loadAll()
     {
         $this->loadMails();
@@ -88,7 +78,6 @@ class githubIssueImporter {
         if(!$mailsIds) {
             // empty
         }
-
         foreach ($mailsIds as $id)
         {
             $this->mails[$id] = $this->mailbox->getMail($id);
@@ -97,19 +86,13 @@ class githubIssueImporter {
                 $this->mailbox->deleteMail($id);
             }
         }
-
+        
+        
         return $this;
     }
-
-
     
-    public function loadFeed($parser = 'RSS')
-    {
-        return $this;
-    }
-
-
-    public function buildIssues($source = 'mail', $parser = 'plain')
+    
+    public function buildIssues($source, $parser = 'plain')
     {
         if ($source == 'mail' && $parser == 'plain')
         {
@@ -127,16 +110,12 @@ class githubIssueImporter {
                 $mail->textPlain = str_replace("Wir haben für Sie folgenden Anruf angenommen:\r\n", '', $mail->textPlain);
                 $mail->textPlain = str_replace("Herzliche Grüße\nIhr DiConn Team", '', $mail->textPlain);
                 $mail->textPlain = str_replace("diconn", '', $mail->textPlain);
-
                 // Notiz extrahieren
                 $notiz = explode("Notiz: ", utf8_decode($mail->textPlain));
                 $notiz = explode('Telefon: ', $notiz[1]);
                 $notiz = explode('Mobil: ', $notiz[0]);
                 $notiz = explode('E-Mail: ', $notiz[0]);
                 $notiz = explode('Bearbeitet durch: ', $notiz[0])[0];
-				
-                var_dump($notiz);
-                
                 // Meta-Angaben zur MD-Tabelle aufbereiten
                 $text = explode("\r\n", utf8_decode($mail->textPlain));
                 $i = 0;
@@ -145,7 +124,6 @@ class githubIssueImporter {
                     $i++;
                     $delimiter = ':';
                     $element = explode($delimiter, $line, 2);
-
                     if (isset($element[1]) && !empty(trim($element[1])) && $element[0] != "Notiz") {
                         $line = "{$element[0]} | {$element[1]}";
                         if ($i == 1) $line .= " Uhr \n-------|-------";
@@ -158,26 +136,111 @@ class githubIssueImporter {
                 }
                 $text = implode("", $text);
                 $text .= "\n$notiz";
-
-                $issue['title'] =   utf8_decode($mail->subject);
-                $issue['text'] =    $text;
+                $issue['title'] =   utf8_encode($mail->subject);
+                $issue['text'] =    utf8_encode($text);
                 $issue['label'] =   array('Support', 'Call');
                 $this->issues[] = $issue;
+                
+                //var_dump($this->issues);
             }
+        }
+        elseif ($source == 'rss' && $parser == 'status.df.eu')
+        {
+            foreach($this->feed->item as $item)
+            {
+                //$guid = (int)explode('#', $item->link)[1];
+                $issue['title'] = $item->title;
+                $issue['text'] = $item->description."\n_____\n".$this->feed->channel->title."\n".$this->feed->channel->description."\n".$item->link;
+                $this->issues[] = $issue;
+            }
+            print_r($this->issues);
         }
         else
         {
             throw new \Exception ("Source '$source' with parser '$parser' not implemented (yet)", 501);
         }
+        //print_r($this->issues); 
+        //die();
         return $this;
     }
+    
+    
+    
+    
+    
+    
+    
+    /**
+     * Assign issue to users by keyword
+     *
+     * @since v1.1
+     * @link https://github.com/ADoebeling/GithubIssueImporter/issues/6
+     *
+     * @param $haystack
+     * @param $assignee
+     * @return $this
+     * @throws Exception 501 if $haystack is not title or text
+     */
+    public function setAssigneeByKeyword($haystack, $assignee)
+    {
+    	$this->confUser = explode(';',trim(file_get_contents(CONF_FILE)));
+        if ($haystack != 'title' && $haystack != 'text')
+        {
+            throw new Exception("\$haystack '$haystack' not specified", 501);
+        }
+        foreach ($this->issues as &$issue)
+        {
+        	$issue[$haystack] = utf8_decode($issue[$haystack]);
+        	foreach ($this->confUser as $userStr)
+        	{
+        		$tempUser = explode('|',$userStr);
+        		if (strpos($issue[$haystack],$tempUser[1]) !== false)
+        		{
+        			$issue['assignee'] = $tempUser[0];
+        			break;
+        		}
+        		else $issue['assignee'] = $assignee;
+        	}
+        	       	
+//         	var_dump($needle);
+//             if (strpos($issue[$haystack], $needle) !== false)
+//             {
+//                 $issue['assignee'] = $assignee;
+//             }
 
-    public function postIssues($repoOwner, $repo, $assignee = NULL, $label)
+
+        }
+        return $this;
+    }
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    
+    public function postIssues($repoOwner, $repo, $defaultAssignee = NULL, $label, $update = false)
     {
         foreach ($this->issues as &$issue)
         {
-            echo "this->githubRepo->issues->createAnIssue($repoOwner, $repo, {$issue['title']}, {$issue['text']}, $assignee, NULL, {$label})\n";
-            $this->githubRepo->issues->createAnIssue($repoOwner, $repo, utf8_encode($issue['title']), utf8_encode($issue['text']), $assignee, NULL, $label);
+            if (!isset($issue['assignee']))
+            {
+                $issue['assignee'] = $defaultAssignee;
+            }
+            if ($update)
+            {
+                $currentIssues = $this->githubRepo->issues->listIssues($repoOwner, $repo);
+                //var_dump($currentIssues);
+                die();
+            }
+            else
+            {
+                echo "this->githubRepo->issues->createAnIssue($repoOwner, $repo, {$issue['title']}, {$issue['text']}, $assignee, NULL, {$label})\n";
+                $this->githubRepo->issues->createAnIssue($repoOwner, $repo, $issue['title'], $issue['text'], $issue['assignee'], NULL, $label);
+            }
         }
         return $this;
     }

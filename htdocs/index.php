@@ -9,6 +9,5 @@ error_reporting(E_ALL);
 
 </head>
 <body>
-<h1>Hallo</h1>
 </body>
 </html>
