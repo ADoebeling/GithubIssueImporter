@@ -1,4 +1,5 @@
-config/*
+/config.inc.txt
 /script/diconn.php
 /htdocs/index.php
 *.p7s
+config.inc.txt
