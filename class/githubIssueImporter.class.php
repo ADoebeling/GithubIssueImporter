@@ -109,16 +109,22 @@ class githubIssueImporter {
             {
                 $mail->textPlain = str_replace("Wir haben für Sie folgenden Anruf angenommen:\r\n", '', $mail->textPlain);
                 $mail->textPlain = str_replace("Herzliche Grüße\nIhr DiConn Team", '', $mail->textPlain);
-                $mail->textPlain = str_replace("diconn", '', $mail->textPlain);
+                                
                 // Notiz extrahieren
                 $notiz = explode("Notiz: ", utf8_decode($mail->textPlain));
                 $notiz = explode('Telefon: ', $notiz[1]);
                 $notiz = explode('Mobil: ', $notiz[0]);
                 $notiz = explode('E-Mail: ', $notiz[0]);
                 $notiz = explode('Bearbeitet durch: ', $notiz[0])[0];
+
+                
+                                
                 // Meta-Angaben zur MD-Tabelle aufbereiten
                 $text = explode("\r\n", utf8_decode($mail->textPlain));
                 $i = 0;
+                
+                //var_dump($text);//debugg
+                
                 foreach ($text as &$line)
                 {
                     $i++;
@@ -134,14 +140,17 @@ class githubIssueImporter {
                         $line = '';
                     }
                 }
+                
+                
                 $text = implode("", $text);
                 $text .= "\n$notiz";
-                $issue['title'] =   utf8_encode($mail->subject);
+                //$issue['title'] =   utf8_encode($mail->subject);
+                $issue['title'] =   $mail->subject;
                 $issue['text'] =    utf8_encode($text);
                 $issue['label'] =   array('Support', 'Call');
                 $this->issues[] = $issue;
                 
-                //var_dump($this->issues);
+                //var_dump($this->issues);//debugg
             }
         }
         elseif ($source == 'rss' && $parser == 'status.df.eu')
@@ -184,49 +193,41 @@ class githubIssueImporter {
     public function setAssigneeByKeyword($haystack, $assignee)
     {
     	$this->confUser = explode(';',trim(file_get_contents(CONF_FILE)));
+        
         if ($haystack != 'title' && $haystack != 'text')
         {
             throw new Exception("\$haystack '$haystack' not specified", 501);
         }
+        
         foreach ($this->issues as &$issue)
         {
-        	$issue[$haystack] = utf8_decode($issue[$haystack]);
+        	$issue[$haystack] = $issue[$haystack];
+        	
+        	
         	foreach ($this->confUser as $userStr)
         	{
         		$tempUser = explode('|',$userStr);
+        		
         		if (strpos($issue[$haystack],$tempUser[1]) !== false)
         		{
-        			$issue['assignee'] = $tempUser[0];
+        			$issue['assignee'] = trim($tempUser[0]);
         			break;
         		}
-        		else $issue['assignee'] = $assignee;
+        		else $issue['assignee'] = trim($assignee);
         	}
-        	       	
-//         	var_dump($needle);
-//             if (strpos($issue[$haystack], $needle) !== false)
-//             {
-//                 $issue['assignee'] = $assignee;
-//             }
-
-
         }
         return $this;
     }
     
     
     
-    
-    
-    
-    
-    
-    
+
     
     public function postIssues($repoOwner, $repo, $defaultAssignee = NULL, $label, $update = false)
     {
         foreach ($this->issues as &$issue)
         {
-            if (!isset($issue['assignee']))
+            if (!isset($issue['assignee']) && $defaultAssignee != NULL)
             {
                 $issue['assignee'] = $defaultAssignee;
             }
@@ -238,7 +239,7 @@ class githubIssueImporter {
             }
             else
             {
-                echo "this->githubRepo->issues->createAnIssue($repoOwner, $repo, {$issue['title']}, {$issue['text']}, $assignee, NULL, {$label})\n";
+                //echo "this->githubRepo->issues->createAnIssue($repoOwner, $repo, {$issue['title']}, {$issue['text']}, {$issue['assignee']}, NULL, {$label[0]})\n";
                 $this->githubRepo->issues->createAnIssue($repoOwner, $repo, $issue['title'], $issue['text'], $issue['assignee'], NULL, $label);
             }
         }
